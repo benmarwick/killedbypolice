@@ -1,0 +1,11 @@
+Package: killedbypolice
+Type: Package
+Title: Data on police killings from killedbypolice.net
+Version: 0.1.0
+Authors@R: c(person("Ben", "Marwick", role = c("aut", "cre"), email = "benmarwick@gmail.com"))
+Maintainer: Ben Marwick <benmarwick@gmail.com>
+Description: Contains data on people killed by police in the United States of America since 2013. The data are obtained from the internet site <http://killedbypolice.net/>.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+
