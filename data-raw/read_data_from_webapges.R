@@ -21,12 +21,71 @@ x3 <- map(x2, ~.x %>%
                      sep = "<td>",
                      remove = FALSE))
 
+#' convert list of data frames to one big data frame
+x4 <- bind_rows(x3)
 
-x4 <- map(x3 , ~.x %>%
-            separate(V2,
-                     into = c('date', 'date2',
-                              'date3', 'date4'),
-                     sep = "<br>"))
+
+# we want to separate rows on V2, V4, V5 (date, sex/race, name), but these are sometime
+# not exactly equal when there are mulitple deceased on one event. So we need to
+# tidy it a bit.
+
+# how many <br> in each col?
+x5 <- x4  %>%
+          mutate(br_in_date = str_count(V2, "<br>")) %>%
+          mutate(br_in_genderrace = str_count(V4, "<br>")) %>%
+          mutate(br_in_nameage = str_count(V5, "<br>")) %>%
+          mutate(max_br = pmax(br_in_date, br_in_genderrace, br_in_nameage)) %>%
+            rowwise() %>%
+          mutate(which_has_max = which.max(c(br_in_date,
+                                             br_in_genderrace,
+                                             br_in_nameage)))
+
+# insert some <br> into cols if they don't have the max number for that row
+
+x5$genderrace_new <- 0
+x5$nameage_new <- 0
+x5$date_new <- 0
+
+for(i in seq_len(nrow(x5))){
+
+  x5$genderrace_new[i] <-
+    with(x5, ifelse((br_in_date[i] > br_in_genderrace[i]),
+           paste(V4[i], rep("<br>.", (br_in_date[i] - br_in_genderrace[i]))),
+           V4[i]))
+
+  x5$genderrace_new[i] <-
+    with(x5, ifelse(br_in_nameage[i] > str_count(genderrace_new[i], "<br>"),
+                    paste(genderrace_new[i], rep("<br>.", (br_in_nameage[i] - br_in_genderrace[i]))),
+                    genderrace_new[i]))
+
+  x5$nameage_new[i] <-
+    with(x5, ifelse((br_in_date[i] > br_in_nameage[i]),
+           paste(V5[i], rep("<br>.", (br_in_date[i] - br_in_nameage[i]))),
+           V5[i]))
+
+  x5$date_new[i] <-
+    with(x5, ifelse((br_in_genderrace[i] > br_in_date[i]),
+                    paste(V2[i], rep(glue("<br>.{V2[i]}"), (br_in_genderrace[i] - br_in_date[i]))),
+                    V2[i]))
+
+  x5$date_new[i] <-
+    with(x5, ifelse(br_in_nameage[i] > str_count(date_new[i], "<br>"),
+                    paste(date_new[i], rep(glue("<br>.{date_new[i]}"), (br_in_nameage[i] - br_in_date[i]))),
+                    date_new[i]))
+
+
+}
+
+# check that we have the same number of <br> in those three cols
+# x6 <- x5  %>%
+#   mutate(br_in_date2 = str_count(date_new, "<br>")) %>%
+#   mutate(br_in_genderrace2 = str_count(genderrace_new, "<br>")) %>%
+#   mutate(br_in_nameage2 = str_count(nameage_new, "<br>")) %>%
+#   mutate(max_br2 = pmax(br_in_date2, br_in_genderrace2, br_in_nameage2))
+
+x6 <- x5 %>%
+      separate_rows(c(date_new, genderrace_new, nameage_new),
+                     sep = "<br>")
 
 #' format dates, get rid of white space
 x5 <- map(x4, ~.x %>%
@@ -95,17 +154,18 @@ x9 <- map(x8, ~.x %>%
 #' convert list of data frames to one big data frame
 x10 <- bind_rows(x9)
 
-#' We have `r nrow(x9)` rows.
+#' We have `r nrow(x10)` rows.
 #'
 #' remove some less informative rows
 x10 <- select(x10,
-             -X1,
-             -V1,
-             -V5,
-             -V7,
-             -V8,
-             -V9,
-             -V10)
+              date_format2,
+              deceased_name,
+              deceased_age,
+              gender1,
+              race1,
+              method1,
+              State
+              )
 
 #------------------------------------------------------------------------------
 
