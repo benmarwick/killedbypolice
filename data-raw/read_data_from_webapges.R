@@ -202,6 +202,14 @@ x13 <- x12 %>%
   mutate(deceased_age = as.numeric(deceased_age),
          date_format = as.Date(date_format))
 
+# rename a few variables
+x14 <- x13 %>%
+  rename(event_date = date_format,
+         state = State,
+         name = deceased_name,
+         age = deceased_age,
+         race_ethnicity = race)
+
 #' Now we have the data frame for 2013-2017
 #' Let's save to the package
 kbp2013_2017 <- x13
