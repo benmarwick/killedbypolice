@@ -1,13 +1,18 @@
 #' Import the data from the webpages into R objects
 #'
-#'
+#------------------------------------------------------------------------------
 
+#'
 #' Here are the web pages that we downloaded on 1 Jan 2018, using Chrome Version 63.0.3239.84 (Official Build) (64-bit)
-webpages <- list.files(pattern = ".html$", full.names = TRUE)
+library(here)
+webpages <- list.files(here("/data-raw"), pattern = ".html$", full.names = TRUE)
 
 # read in the webapges into the R session
 library(tidyverse)
 all_pages <- map(webpages, ~read_table(.x))
+
+#------------------------------------------------------------------------------
+
 
 #' filter to keep only columns that have data in them, get rid of some HTML
 x2 <- map(all_pages, ~.x %>%
@@ -21,8 +26,13 @@ x3 <- map(x2, ~.x %>%
                      sep = "<td>",
                      remove = FALSE))
 
+#------------------------------------------------------------------------------
+
 #' convert list of data frames to one big data frame
 x4 <- bind_rows(x3)
+
+#------------------------------------------------------------------------------
+
 
 
 # we want to separate rows on V2, V4, V5 (date, sex/race, name), but these are sometime
@@ -82,116 +92,154 @@ for(i in seq_len(nrow(x5))){
 #   mutate(br_in_genderrace2 = str_count(genderrace_new, "<br>")) %>%
 #   mutate(br_in_nameage2 = str_count(nameage_new, "<br>")) %>%
 #   mutate(max_br2 = pmax(br_in_date2, br_in_genderrace2, br_in_nameage2))
+#------------------------------------------------------------------------------
 
+
+#' Continue cleaning, format dates, get rid of white space, before we separate rows
 x6 <- x5 %>%
+  mutate_all(funs(trimws)) %>%
+  mutate(date = str_replace_all(date_new,
+                                "<center>\\([0-9]*\\)|</center></td>|[:punct:]",
+                                "")) %>%
+  mutate_all(funs(trimws)) %>%
+  mutate(date_format =  as.Date(date, "%B %d %Y"))
+
+#------------------------------------------------------------------------------
+
+
+#' Now that we've made sure we have an equal number of <br> in each col,
+#' we can separate rows on <br> to get multiple deceased in one event
+#' in one row each
+x7 <- x6 %>%
       separate_rows(c(date_new, genderrace_new, nameage_new),
                      sep = "<br>")
 
-#' format dates, get rid of white space
-x5 <- map(x4, ~.x %>%
-            mutate_all(funs(trimws)) %>%
-            mutate(date = str_replace_all(date,
-                                          "<center>\\([0-9]*\\)|</center></td>|[:punct:]",
-                                          "")) %>%
-            mutate(date2 = str_replace_all(date2,
-                                           "\\([0-9]*\\)|</center></td>|[:punct:]",
-                                           "")) %>%
-            mutate_all(funs(trimws)) %>%
-            mutate(date_format =  as.Date(date, "%B %d %Y")) %>%
-            mutate(date_format2 =  as.Date(date2, "%B %d %Y"))
-            )
+#------------------------------------------------------------------------------
 
-#'  remove URLs in name col, split mulitple desceased into multiple cols
-x6 <- map(x5, ~.x %>%
-            mutate(deceased = gsub('http\\S+\\s*', "", V5)) %>%
+
+#'  remove URLs in name col, split deceased into name and age
+x8 <- x7 %>%
+            mutate(deceased = gsub('http\\S+\\s*', "", nameage_new)) %>%
             mutate(deceased = gsub('<a href="|</a>|target="new"|</td>', "", deceased)) %>%
-            # make separate row where there are two deceased in one row
-            separate_rows(deceased, sep = "<br>") %>%
             mutate(deceased = str_replace_all(deceased, "<|>", "")) %>%
             # get the name and age in their own cols
             separate(deceased,
                      into = c('deceased_name', 'deceased_age'),
                      sep = ",(?=[^,]+$)",  # split on the last comma
                      remove = FALSE)  %>%
-            mutate(deceased_age = as.numeric(trimws(deceased_age))))
-
-# split gender and race col into separate cols
-x7 <-  map(x6, ~.x %>%
-            mutate(V4 = str_replace_all(V4, "</td>", "")) %>%
-            separate(V4,
-                     into = c('gender_race1',
-                              'gender_race2',
-                              'gender_race3'),
-                     sep = "<br>") %>%
-            separate(gender_race1,
-                     into = c('gender1',
-                              'race1'),
-                     sep = "/") %>%
-            separate(gender_race2,
-                     into = c('gender2',
-                              'race2'),
-                     sep = "/"))
-
-
-# separate out multiple methods
-x8 <- map(x7, ~.x %>%
-            mutate(V6 = str_replace_all(V6, '<font size="2">|</font></td>', "")) %>%
-            mutate(V6 = trimws(V6)) %>%
-            separate(V6,
-                     into = glue('method_{1:10}'),
-                     sep = "<br>"))
-
-# tidy state column
-x9 <- map(x8, ~.x %>%
-            mutate(State = str_replace_all(V3, "</td>", "")) %>%
-            mutate(State = trimws(State)) %>%
-            select(-V3))
-
-
+            mutate(deceased_age = as.numeric(trimws(deceased_age)))
 
 #------------------------------------------------------------------------------
 
-#' convert list of data frames to one big data frame
-x10 <- bind_rows(x9)
 
-#' We have `r nrow(x10)` rows.
+#' split gender and race col into separate cols
+x9 <-  x8 %>%
+            mutate(genderrace_new = str_replace_all(genderrace_new, "</td>", "")) %>%
+            separate(genderrace_new,
+                     into = c('gender',
+                              'race'),
+                     sep = "/")
+
+#------------------------------------------------------------------------------
+
+
+#' separate out multiple methods. We have to be careful here because we can see
+#' multiple methods where there are multiple deceased on one event, and where
+#' there is one deceased who was killed in multiple ways. Clean out the HTML
+#' first...
+
+x10 <- x9 %>%
+            mutate(V6 = str_replace_all(V6, '<font size="2">|</font></td>|<center>|</center>|<font color="white">\\.</font>', "")) %>%
+            mutate(method = trimws(V6))
+
+#' Then if there are two methods, and the second is different from the first,
+#' then we assume that it's one deceased with multiple methods, and we want
+#' to keep those. We don't want to keep multiple same methods, not informative
 #'
-#' remove some less informative rows
-x10 <- select(x10,
-              date_format2,
-              deceased_name,
-              deceased_age,
-              gender1,
-              race1,
-              method1,
-              State
-              )
+# unique(x10$method)
+method_simplify <- function(x){
+  t2 <- str_extract_all(x, "[A-Z]")
+  t3 <- map_int(t2, ~length(unique(.x)))
+  t4 <- map2(t2, t3, ~.x[1:.y])
+  t5 <- map_chr(t4, ~paste(.x, collapse = "<br>"))
+  return(t5)
+}
+
+x10$method <- method_simplify(x10$method)
+
+x11 <-  x10 %>%
+        separate(method,
+                 into = glue('method_{1:5}'),
+                 sep = "<br>") %>%
+  mutate_all(funs(trimws))
+# unique(x11$method_3)
+
+#------------------------------------------------------------------------------
+
+
+#' tidy state column
+x12 <- x11 %>%
+            mutate(State = str_replace_all(V3, "</td>", "")) %>%
+            mutate(State = trimws(State))
+
+#------------------------------------------------------------------------------
+
+
+#' get only columns of interest & ensure type is ok
+x13 <- x12 %>%
+  select("date_format",
+         "State",
+         "deceased_name",
+         "deceased_age",
+         "gender",
+         "race",
+          "method_1",
+          "method_2",
+          "method_3",
+          "method_4",
+          "method_5"
+          ) %>%
+  mutate(deceased_age = as.numeric(deceased_age),
+         date_format = as.Date(date_format))
+
+#' Now we have the data frame for 2013-2017
+#' Let's save to the package
+kbp2013_2017 <- x13
+devtools::use_data(kbp2013_2017)
+
+#' and document
+
+
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 
 #' What does it look like? Here's a snippet of just a few columns:
-x10 %>%
-  select(date, State, deceased_name, deceased_age) %>%
+x13 %>%
+  select(date_format,
+         State,
+         deceased_name,
+         deceased_age) %>%
   head(n = 10) %>%
   knitr::kable()
 
 #' ## Some quick plots
 
-ggplot(x10,
+ggplot(x13,
        aes(deceased_age)) +
   geom_histogram() +
   theme_bw()
 
 #' age and gender
 age_and_gender <-
-  x10 %>%
-  select(deceased_age, gender1) %>%
+  x13 %>%
+  select(deceased_age, gender) %>%
   filter(!is.na(deceased_age)) %>%
   mutate(age_category=cut(deceased_age,
                           breaks = seq(0,max(deceased_age), 5))) %>%
   filter(!is.na(age_category)) %>%
   group_by(age_category) %>%
-  summarise(prop_female = sum(gender1 == 'F') / n())
+  summarise(prop_female = sum(gender == 'F') / n())
 
 ggplot(age_and_gender,
        aes(age_category,
@@ -205,7 +253,7 @@ ggplot(age_and_gender,
 
 #' race
 race <-
-  x6 %>%
+  x13 %>%
   select(deceased_age, race) %>%
   filter(!is.na(race)) %>%
   filter(!is.na(deceased_age)) %>%
@@ -229,18 +277,18 @@ ggplot(race_n,
   xlab("Race (as classified by killedbypolice.net)") +
   theme_bw()  +
   ggtitle("Deaths by police, by age and race of deceased",
-          subtitle = glue("Data from {url}"))
+          subtitle = glue("Data from kpb"))
 
 #' method of death
 method_of_death <-
-  x6 %>%
+  x13 %>%
   mutate(method_long = case_when(
-    method == "G" ~ "Gun",
-    method == "T" ~ "Taser",
-    method == "R" ~ "Restraint/\nPhysical Force",
-    method == "C" ~ "Chemical",
-    method == "V" ~ "Vehicle",
-    method == "O" ~ "Other"))
+    method_1 == "G" ~ "Gun",
+    method_1 == "T" ~ "Taser",
+    method_1 == "R" ~ "Restraint/\nPhysical Force",
+    method_1 == "C" ~ "Chemical",
+    method_1 == "V" ~ "Vehicle",
+    method_1 == "O" ~ "Other"))
 
 method_of_death_df <-
   method_of_death %>%
@@ -255,7 +303,7 @@ ggplot(method_of_death_df,
            prop)) +
   geom_col() +
   xlab("") +
-  ylab("Proportion of all deaths by police") +
+  ylab("Proportion of all\ndeaths by police") +
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 
@@ -265,27 +313,47 @@ ggplot(method_of_death_df,
 #' https://hafen.github.io/geofacet/
 library("geofacet")
 
-ggplot(x6,
+ggplot(x13,
        aes(deceased_age)) +
   geom_histogram() +
   theme_bw() +
-  facet_geo(~ V3)
+  facet_geo(~ State)
 
 #'  hexbin state map
 #'  based on https://rud.is/b/2015/05/15/u-s-drought-monitoring-with-hexbin-state-maps-in-r/
-x7 <-
-  x6 %>%
-  group_by(V3) %>%
+#'  get state population data
+tmp <- rio::import("https://www2.census.gov/programs-surveys/popest/tables/2010-2016/state/totals/nst-est2016-01.xlsx",
+                   skip = 3)
+
+# save it locally
+write.csv(tmp, paste0(here::here("data-raw"),"/nst-est2016-01.csv"))
+
+# clean up state names to abbreviations
+
+state_abb <- data_frame(state_name = state.name,
+                        state_abb = state.abb)
+state_abb <- rbind(state_abb,
+                   data_frame(
+                     state_name = "District of Columbia",
+                     state_abb = "DC"))
+state_pops <-
+  tmp %>%
+  mutate(state_name = gsub("\\.", "", X__1)) %>%
+  left_join(state_abb)
+
+x14 <-
+  x13 %>%
+  group_by(State) %>%
   tally() %>%
-  left_join(state_pops, by = c("V3" = "state_abb")) %>%
+  left_join(state_pops, by = c("State" = "state_abb")) %>%
   mutate(prop =  n / Census * 100000) # per 100k people
 
 library(rgdal)
 library(rgeos)
 
 # get map from
-download.file("https://gist.githubusercontent.com/hrbrmstr/51f961198f65509ad863/raw/219173f69979f663aa9192fbe3e115ebd357ca9f/us_states_hexgrid.geojson", "us_states_hexgrid.geojson")
-us <- readOGR("us_states_hexgrid.geojson", "OGRGeoJSON")
+download.file("https://gist.githubusercontent.com/hrbrmstr/51f961198f65509ad863/raw/219173f69979f663aa9192fbe3e115ebd357ca9f/us_states_hexgrid.geojson", destfile=paste0(here::here("data-raw"),"/us_states_hexgrid.geojson"))
+us <- readOGR(paste0(here::here("data-raw"),"/us_states_hexgrid.geojson"), "OGRGeoJSON")
 centers <- cbind.data.frame(data.frame(gCentroid(us, byid=TRUE), id=us@data$iso3166_2))
 us_map <- fortify(us, region="iso3166_2")
 
