@@ -1,0 +1,41 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "README-"
+)
+```
+
+# killedbypolice
+
+The goal of killedbypolice is to make readily available the data collected by <http://killedbypolice.net/> for exploration, visualisation, and analysis. 
+
+## Installation
+
+You can install killedbypolice from github with:
+
+```{r gh-installation, eval = FALSE}
+# install.packages("devtools")
+devtools::install_github("benmarwick/killedbypolice")
+```
+
+## Example
+
+This is a basic example which shows you how to access the data in this package:
+
+```{r example}
+# load the library
+library(killedbypolice)
+
+# load the data frame, ready to work with 
+data("kbp2013_2017")
+
+# inspect the data
+str(kbp2013_2017)
+```
