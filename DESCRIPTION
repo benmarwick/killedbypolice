@@ -8,4 +8,5 @@ Description: Contains data on people killed by police in the United States of Am
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-
+URL: https://github.com/benmarwick/killedbypolice
+BugReports: https://github.com/benmarwick/killedbypolice/issues
