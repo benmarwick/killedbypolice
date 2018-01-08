@@ -202,18 +202,35 @@ x13 <- x12 %>%
   mutate(deceased_age = as.numeric(deceased_age),
          date_format = as.Date(date_format))
 
-# rename a few variables
+# rename a few variables, tidy date
+library(lubridate)
 x14 <- x13 %>%
   rename(event_date = date_format,
          state = State,
          name = deceased_name,
          age = deceased_age,
-         race_ethnicity = race)
+         race_ethnicity = race) %>%
+  mutate(event_year = year(event_date),
+         event_month = month(event_date),
+         event_day = day(event_date)) %>%
+  select(-event_date)
+
+# any stray HTML still in there?
+# look for it
+x14 %>%
+   filter_all(any_vars(grepl("<|>", .))) %>%
+   View
+
+# clear it out
+x15 <- x14 %>%
+  mutate_all(funs(ifelse(grepl("<|>", .), "", .)))
+
+x15$gender <- str_replace_all(x15$gender, "\\.", "")
 
 #' Now we have the data frame for 2013-2017
 #' Let's save to the package
-kbp2013_2017 <- x13
-devtools::use_data(kbp2013_2017)
+kbp2013_2017 <- x15
+devtools::use_data(kbp2013_2017, overwrite = TRUE)
 
 #' and document
 
