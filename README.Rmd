@@ -62,7 +62,7 @@ head(kbp2013_2017)
 
 Here are some explorations of the data:
 
-The most common age to be killed by police is the in the late twenties and early thirties, and this has not changed much over time.
+The most common age to be killed by police is in the late twenties and early thirties, and this has not changed much over time.
 
 ```{r}
 library(ggplot2)
@@ -84,7 +84,7 @@ kbp2013_2017 %>%
   theme(axis.title = element_text(size = 14))
 ```
 
-Of the three ethnic groups that make up most of the deaths, black and Latino people tend to be younger than white people when they are killed by police. 
+Of the three ethnic groups that make up most of the deaths, Black and Latino people tend to be younger than White people when they are killed by police. 
 
 ```{r}
 kbp2013_2017 %>% 

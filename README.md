@@ -4,7 +4,7 @@ killedbypolice
 ==============
 
 <!--
-[![Last-changedate](https://img.shields.io/badge/last%20change-2018--01--07-brightgreen.svg)](https://github.com/benmarwick/killedbypolice/commits/master)  
+[![Last-changedate](https://img.shields.io/badge/last%20change-2018--01--08-brightgreen.svg)](https://github.com/benmarwick/killedbypolice/commits/master)  
 [![Travis build status](https://travis-ci.org/benmarwick/killedbypolice.svg?branch=master)](https://travis-ci.org/benmarwick/killedbypolice)   [![lifecycle](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://img.shields.io/badge/lifecycle-experimental-orange.svg)
 -->
 The goal of killedbypolice is to make readily available the data collected by <http://killedbypolice.net/> for exploration, visualisation, and analysis.
@@ -43,8 +43,7 @@ Here are some ways we can take a look at the structure of the data:
 suppressPackageStartupMessages(library(dplyr))
 glimpse(kbp2013_2017)
 #> Observations: 5,578
-#> Variables: 14
-#> $ event_date     <date> 2013-12-31, 2013-12-31, 2013-12-31, 2013-12-30...
+#> Variables: 13
 #> $ state          <chr> "WA", "CA", "NC", "PA", "CA", "CO", "CA", "LA",...
 #> $ name           <chr> "James M. Eshelman", "Dontae Hayes", "Ricky Jun...
 #> $ age            <dbl> 54, 20, 34, 43, 31, 43, 45, 22, 30, 51, 37, 40,...
@@ -60,17 +59,16 @@ glimpse(kbp2013_2017)
 #> $ event_day      <int> 31, 31, 31, 30, 30, 29, 29, 29, 29, 29, 28, 28,...
 
 head(kbp2013_2017)
-#> # A tibble: 6 x 14
-#>   event_date state name     age gender race~ meth~ meth~ meth~ meth~ meth~
-#>   <date>     <chr> <chr>  <dbl> <chr>  <chr> <chr> <chr> <chr> <chr> <chr>
-#> 1 2013-12-31 WA    James~  54.0 M      <NA>  G     <NA>  <NA>  <NA>  <NA> 
-#> 2 2013-12-31 CA    Donta~  20.0 M      B     G     <NA>  <NA>  <NA>  <NA> 
-#> 3 2013-12-31 NC    Ricky~  34.0 M      B     G     <NA>  <NA>  <NA>  <NA> 
-#> 4 2013-12-30 PA    Willi~  43.0 M      B     G     <NA>  <NA>  <NA>  <NA> 
-#> 5 2013-12-30 CA    Betha~  31.0 F      W     G     <NA>  <NA>  <NA>  <NA> 
-#> 6 2013-12-29 CO    Chris~  43.0 M      W     G     <NA>  <NA>  <NA>  <NA> 
-#> # ... with 3 more variables: event_year <dbl>, event_month <dbl>,
-#> #   event_day <int>
+#> # A tibble: 6 x 13
+#>   state name     age gend~ race~ meth~ meth~ meth~ meth~ meth~ even~ even~
+#>   <chr> <chr>  <dbl> <chr> <chr> <chr> <chr> <chr> <chr> <chr> <dbl> <dbl>
+#> 1 WA    James~  54.0 M     <NA>  G     <NA>  <NA>  <NA>  <NA>   2013  12.0
+#> 2 CA    Donta~  20.0 M     B     G     <NA>  <NA>  <NA>  <NA>   2013  12.0
+#> 3 NC    Ricky~  34.0 M     B     G     <NA>  <NA>  <NA>  <NA>   2013  12.0
+#> 4 PA    Willi~  43.0 M     B     G     <NA>  <NA>  <NA>  <NA>   2013  12.0
+#> 5 CA    Betha~  31.0 F     W     G     <NA>  <NA>  <NA>  <NA>   2013  12.0
+#> 6 CO    Chris~  43.0 M     W     G     <NA>  <NA>  <NA>  <NA>   2013  12.0
+#> # ... with 1 more variable: event_day <int>
 ```
 
 Some explorations
@@ -78,7 +76,7 @@ Some explorations
 
 Here are some explorations of the data:
 
-The most common age to be killed by police is the in the late twenties and early thirties, and this has not changed much over time.
+The most common age to be killed by police is in the late twenties and early thirties, and this has not changed much over time.
 
 ``` r
 library(ggplot2)
@@ -105,7 +103,7 @@ kbp2013_2017 %>%
 
 ![](README-unnamed-chunk-2-1.png)
 
-Of the three ethnic groups that make up most of the deaths, black and Latino people tend to be younger than white people when they are killed by police.
+Of the three ethnic groups that make up most of the deaths, Black and Latino people tend to be younger than White people when they are killed by police.
 
 ``` r
 kbp2013_2017 %>% 
