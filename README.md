@@ -4,7 +4,7 @@ killedbypolice
 ==============
 
 <!--
-[![Last-changedate](https://img.shields.io/badge/last%20change-2018--01--08-brightgreen.svg)](https://github.com/benmarwick/killedbypolice/commits/master)  
+[![Last-changedate](https://img.shields.io/badge/last%20change-2018--01--09-brightgreen.svg)](https://github.com/benmarwick/killedbypolice/commits/master)  
 [![Travis build status](https://travis-ci.org/benmarwick/killedbypolice.svg?branch=master)](https://travis-ci.org/benmarwick/killedbypolice)   [![lifecycle](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://img.shields.io/badge/lifecycle-experimental-orange.svg)
 -->
 The goal of killedbypolice is to make readily available the data collected by <http://killedbypolice.net/> for exploration, visualisation, and analysis.
@@ -96,9 +96,6 @@ kbp2013_2017 %>%
   xlab("Age at death (years)") +
   ylab("Year") +
   theme(axis.title = element_text(size = 14))
-#> Picking joint bandwidth of 4.28
-#> Warning: Removed 108 rows containing non-finite values
-#> (stat_density_ridges).
 ```
 
 ![](README-unnamed-chunk-2-1.png)
@@ -120,9 +117,6 @@ kbp2013_2017 %>%
   xlab("Age at death (years)") +
   ylab("Year") +
   theme(axis.title = element_text(size = 14))
-#> Picking joint bandwidth of 3.58
-#> Warning: Removed 46 rows containing non-finite values
-#> (stat_density_ridges).
 ```
 
 ![](README-unnamed-chunk-3-1.png)
@@ -156,7 +150,6 @@ In 2016, the state with the largest number of people killed by police was Califo
 ``` r
 library(statebins) # using GitHub version
 library(viridis)
-#> Loading required package: viridisLite
 
 # we need to convert state abbreviations to state names for the statebins function
 state_abb <- data_frame(state_name = state.name,
@@ -165,27 +158,12 @@ state_abb <- data_frame(state_name = state.name,
 # we need to add the state popluations so we can get a proportion of people in each state
 # we got this from https://www2.census.gov/programs-surveys/popest/tables/2010-2016/state/totals/nst-est2016-01.xlsx
 state_populations <- readr::read_csv("data-raw/nst-est2016-01.csv")
-#> Parsed with column specification:
-#> cols(
-#>   X1 = col_integer(),
-#>   X__1 = col_character(),
-#>   Census = col_integer(),
-#>   `Estimates Base` = col_integer(),
-#>   `2010` = col_integer(),
-#>   `2011` = col_integer(),
-#>   `2012` = col_integer(),
-#>   `2013` = col_integer(),
-#>   `2014` = col_integer(),
-#>   `2015` = col_integer(),
-#>   `2016` = col_integer()
-#> )
 
 # clean it a little
 state_populations <-  
   state_populations %>% 
   mutate(state_name = gsub("\\.", "", X__1)) %>%
   left_join(state_abb)
-#> Joining, by = "state_name"
 
 # compute deaths by state and as deaths per 1000 people in each state
 by_state <- kbp2013_2017 %>% 
@@ -196,7 +174,6 @@ by_state <- kbp2013_2017 %>%
   filter(!is.na(state_name)) %>% 
   left_join(state_populations) %>% 
   mutate(per_n_people = (n / `2016`) * 1000000)
-#> Joining, by = "state_name"
 
 # plot 'statebin' style map
 ggplot(by_state, 
@@ -249,6 +226,140 @@ ggplot() +
 ```
 
 ![](README-unnamed-chunk-7-1.png)
+
+Have any states seen strong upward or downward trends over time? It's difficult to see if we plot them all, so let's search for states with strong trends.
+
+``` r
+n_over_time_by_state <- 
+kbp2013_2017 %>% 
+  group_by(state,
+           event_year) %>% 
+  tally() %>% 
+  ungroup()
+
+ggplot(n_over_time_by_state,
+       aes(event_year,
+           n,
+           colour = state)) +
+  geom_line() +
+  geom_text(data = n_over_time_by_state[n_over_time_by_state$n > 50 & n_over_time_by_state$event_year == 2017,],
+           aes(label = state,
+               x = 2017.1, 
+               y = n, 
+               colour = state, 
+               hjust = -.01)) +
+  theme_minimal()  +
+  ylab("Number of people killed by police") +
+  xlab("Year") +
+  theme(legend.position="none")
+```
+
+![](README-unnamed-chunk-8-1.png)
+
+Let's compute a linear model for the number of killings and years for each state, then see which states have the most extreme trends. We can used a nested data frame to do this efficiently (based on the example in Grolemund and Wickham's book [*R for Data Science*](http://r4ds.had.co.nz/many-models.html)):
+
+``` r
+library(tidyr)
+nested_df <- 
+n_over_time_by_state %>% 
+  filter(state != "") %>% 
+  filter(!is.na(event_year)) %>% 
+  nest(-state)
+```
+
+Which looks like this:
+
+``` r
+head(nested_df)
+#> # A tibble: 6 x 2
+#>   state data            
+#>   <chr> <list>          
+#> 1 AK    <tibble [5 x 2]>
+#> 2 AL    <tibble [5 x 2]>
+#> 3 AR    <tibble [5 x 2]>
+#> 4 AZ    <tibble [5 x 2]>
+#> 5 CA    <tibble [5 x 2]>
+#> 6 CO    <tibble [5 x 2]>
+```
+
+And the *tibble* that we see in each row looks something like this:
+
+``` r
+nested_df$data[1]
+#> [[1]]
+#> # A tibble: 5 x 2
+#>   event_year     n
+#>        <dbl> <int>
+#> 1       2013     2
+#> 2       2014     2
+#> 3       2015     6
+#> 4       2016     8
+#> 5       2017     8
+```
+
+Now let's compute linear models for all states:
+
+``` r
+library(purrr)
+model_by_state <- 
+nested_df %>% 
+  mutate(model = map(data, ~lm(event_year ~ n, data = .)))
+```
+
+Let's only look at the states where the linear model has a p-value of less than 0.05 and the adjusted R<sup>2</sup> is &gt;0.7. This will limit us to states that have a statistically significant trend over time:
+
+``` r
+glance <- model_by_state %>% 
+  mutate(glance = map(model, broom::glance)) %>% 
+  unnest(glance, .drop = TRUE)
+
+glance_sig <- 
+  glance %>% 
+  filter(adj.r.squared >= 0.7) %>% 
+  filter(p.value <= 0.05) %>% 
+  arrange(desc(adj.r.squared))
+
+glance_sig
+#> # A tibble: 7 x 12
+#>   state r.squ~ adj.r.~ sigma stati~ p.value    df logLik   AIC   BIC devi~
+#>   <chr>  <dbl>   <dbl> <dbl>  <dbl>   <dbl> <int>  <dbl> <dbl> <dbl> <dbl>
+#> 1 AL     0.943   0.923 0.438   49.2 0.00595     2  -1.69  9.37  8.20 0.574
+#> 2 CO     0.931   0.908 0.479   40.5 0.00785     2  -2.14 10.3   9.11 0.690
+#> 3 WV     0.908   0.878 0.552   29.8 0.0121      2  -2.85 11.7  10.5  0.916
+#> 4 AK     0.880   0.841 0.631   22.1 0.0182      2  -3.52 13.0  11.9  1.20 
+#> 5 NM     0.849   0.799 0.709   16.9 0.0261      2  -4.10 14.2  13.0  1.51 
+#> 6 WI     0.816   0.755 0.782   13.3 0.0355      2  -4.59 15.2  14.0  1.84 
+#> 7 VA     0.785   0.713 0.847   10.9 0.0455      2  -4.99 16.0  14.8  2.15 
+#> # ... with 1 more variable: df.residual <int>
+```
+
+And when we plot only these states with the signficant trends we see that they all indicate a trend of *increasing* deaths by police over time.
+
+No state seems to have succeeded in reducing the total number of people killed by police over time.
+
+``` r
+n_over_time_by_state_sig <- 
+n_over_time_by_state %>% 
+  filter(state %in% glance_sig$state) 
+
+ggplot(n_over_time_by_state_sig,
+       aes(event_year,
+           n,
+           group = state,
+           colour = state)) +
+  geom_line() +
+  geom_text(data = n_over_time_by_state_sig[ n_over_time_by_state_sig$event_year == 2017,],
+           aes(label = state,
+               x = 2017.1, 
+               y = n, 
+               colour = state, 
+               hjust = -.01)) +
+  theme_minimal() +
+  ylab("Number of people killed by police") +
+  xlab("Year")
+```
+
+![](README-unnamed-chunk-14-1.png)
 
 Related work
 ------------

@@ -8,7 +8,9 @@ output: github_document
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  fig.path = "README-"
+  fig.path = "README-",
+  message = FALSE,
+  warning = FALSE
 )
 ```
 
@@ -200,6 +202,125 @@ ggplot() +
   xlab("Month") +
   ylab("Year")
 ```
+
+Have any states seen strong upward or downward trends over time? It's difficult to see if we plot them all, so let's search for states with strong trends.
+
+```{r}
+n_over_time_by_state <- 
+kbp2013_2017 %>% 
+  group_by(state,
+           event_year) %>% 
+  tally() %>% 
+  ungroup()
+
+ggplot(n_over_time_by_state,
+       aes(event_year,
+           n,
+           colour = state)) +
+  geom_line() +
+  geom_text(data = n_over_time_by_state[n_over_time_by_state$n > 50 & n_over_time_by_state$event_year == 2017,],
+           aes(label = state,
+               x = 2017.1, 
+               y = n, 
+               colour = state, 
+               hjust = -.01)) +
+  theme_minimal()  +
+  ylab("Number of people killed by police") +
+  xlab("Year") +
+  theme(legend.position="none")
+  
+```
+
+Let's compute a linear model for the number of killings and years for each state, then see which states have the most extreme trends. We can used a nested data frame to do this efficiently (based on the example in Grolemund and Wickham's book [_R for Data Science_](http://r4ds.had.co.nz/many-models.html)):
+
+```{r}
+library(tidyr)
+nested_df <- 
+n_over_time_by_state %>% 
+  filter(state != "") %>% 
+  filter(!is.na(event_year)) %>% 
+  nest(-state)
+```
+
+Which looks like this:
+
+```{r}
+head(nested_df)
+```
+
+And the _tibble_ that we see in each row looks something like this:
+
+```{r}
+nested_df$data[1]
+```
+
+Now let's compute linear models for all states:
+
+```{r}
+library(purrr)
+model_by_state <- 
+nested_df %>% 
+  mutate(model = map(data, ~lm(event_year ~ n, data = .)))
+```
+
+Let's only look at the states where the linear model has a p-value of less than 0.05 and the adjusted R^2^ is >0.7. This will limit us to states that have a statistically significant trend over time: 
+
+```{r}
+glance <- model_by_state %>% 
+  mutate(glance = map(model, broom::glance)) %>% 
+  unnest(glance, .drop = TRUE)
+
+glance_sig <- 
+  glance %>% 
+  filter(adj.r.squared >= 0.7) %>% 
+  filter(p.value <= 0.05) %>% 
+  arrange(desc(adj.r.squared))
+
+glance_sig
+```
+
+And when we plot only these states with the signficant trends we see that they all indicate a trend of _increasing_ deaths by police over time. 
+
+No state seems to have succeeded in reducing the total number of people killed by police over time. 
+
+```{r}
+n_over_time_by_state_sig <- 
+n_over_time_by_state %>% 
+  filter(state %in% glance_sig$state) 
+
+ggplot(n_over_time_by_state_sig,
+       aes(event_year,
+           n,
+           group = state,
+           colour = state)) +
+  geom_line() +
+  geom_text(data = n_over_time_by_state_sig[ n_over_time_by_state_sig$event_year == 2017,],
+           aes(label = state,
+               x = 2017.1, 
+               y = n, 
+               colour = state, 
+               hjust = -.01)) +
+  theme_minimal() +
+  ylab("Number of people killed by police") +
+  xlab("Year")
+```
+
+```{r include = FALSE}
+tidy_models <- model_by_state %>% 
+  mutate(tidy = map(model, broom::tidy, conf.int = TRUE)) %>% 
+  unnest(tidy, .drop = TRUE) %>% 
+  filter(term == "n") %>% 
+  filter(p.value <= 0.05)
+
+ggplot(tidy_models,
+       aes(reorder(state, -estimate),
+           estimate)) +
+  geom_point() +
+  geom_pointrange(aes(ymin = conf.low , 
+                      ymax = conf.high)) +
+  theme_minimal()
+```
+
 
 ## Related work 
 
