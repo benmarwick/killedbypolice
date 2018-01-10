@@ -98,7 +98,7 @@ kbp2013_2017 %>%
   theme(axis.title = element_text(size = 14))
 ```
 
-![](/readme-figs/unnamed-chunk-2-1.png)
+![](readme-figs/unnamed-chunk-2-1.png)
 
 Of the three ethnic groups that make up most of the deaths, Black and Latino people tend to be younger than White people when they are killed by police.
 
@@ -119,7 +119,7 @@ kbp2013_2017 %>%
   theme(axis.title = element_text(size = 14))
 ```
 
-![](/readme-figs/unnamed-chunk-3-1.png)
+![](readme-figs/unnamed-chunk-3-1.png)
 
 By far the most common way that people are killed by police is with a gun. Deaths by vehicle involve women more often than men.
 
@@ -143,7 +143,7 @@ kbp2013_2017 %>%
   ylab("Percentage of all\npeople killed by police\nby gender") 
 ```
 
-![](/readme-figs/unnamed-chunk-4-1.png)
+![](readme-figs/unnamed-chunk-4-1.png)
 
 In 2016, the state with the largest number of people killed by police was California.
 
@@ -187,7 +187,7 @@ ggplot(by_state,
   theme(legend.title=element_blank()) 
 ```
 
-![](/readme-figs/unnamed-chunk-5-1.png)
+![](readme-figs/unnamed-chunk-5-1.png)
 
 But when we consider the differences in the number of people in each state, New Mexico and Alaska have the highest proportions of people killed by police.
 
@@ -203,7 +203,7 @@ ggplot(by_state,
   theme(legend.title=element_blank()) 
 ```
 
-![](/readme-figs/unnamed-chunk-6-1.png)
+![](readme-figs/unnamed-chunk-6-1.png)
 
 There does not appear to any obvious seasonality to police killings. June 2013 and July 2015 were especially bad months.
 
@@ -225,7 +225,7 @@ ggplot() +
   ylab("Year")
 ```
 
-![](/readme-figs/unnamed-chunk-7-1.png)
+![](readme-figs/unnamed-chunk-7-1.png)
 
 Have any states seen strong upward or downward trends over time? It's difficult to see if we plot them all, so let's search for states with strong trends.
 
@@ -254,7 +254,7 @@ ggplot(n_over_time_by_state,
   theme(legend.position="none")
 ```
 
-![](/readme-figs/unnamed-chunk-8-1.png)
+![](readme-figs/unnamed-chunk-8-1.png)
 
 Let's compute a linear model for the number of killings and years for each state, then see which states have the most extreme trends. We can used a nested data frame to do this efficiently (based on the example in Grolemund and Wickham's book [*R for Data Science*](http://r4ds.had.co.nz/many-models.html)):
 
@@ -359,7 +359,7 @@ ggplot(n_over_time_by_state_sig,
   xlab("Year")
 ```
 
-![](/readme-figs/unnamed-chunk-14-1.png)
+![](readme-figs/unnamed-chunk-14-1.png)
 
 Related work
 ------------
