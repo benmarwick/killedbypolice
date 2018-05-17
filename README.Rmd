@@ -4,6 +4,7 @@ output: github_document
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
+
 ```{r, echo = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
@@ -321,6 +322,211 @@ ggplot(tidy_models,
   theme_minimal()
 ```
 
+How do the states cluster with each other? To identify states with a similar history of fatalities from police violence, we can apply cluster analysis. We can do this in several ways, for example by summary attributes for each state (combining all years), or by the time series. 
+
+Here is the cluster analysis using the summary attributes for each state. In particular we cluster using the variables of mean age at death, proportion male, proportion Black, and proportion killed by guns. 
+
+
+```{r}
+kbp2013_2017_ppl <- 
+  kbp2013_2017 %>% 
+  select(state,
+         age, 
+         gender,
+         race_ethnicity,
+         method_1) %>% 
+  group_by(state) %>% 
+  summarise(mean_age =   mean(age, na.rm = TRUE),
+            prop_male =  sum(gender == "M") / n(),
+            prop_black = sum(race_ethnicity == "B",
+                             na.rm = TRUE) / n(),
+            prop_g =     sum(method_1 == "G") / n())
+
+library(cluster)
+gower_dist <- daisy(kbp2013_2017_ppl[, -1],
+                    metric = "gower")
+
+sil_width <- vector()
+
+for(i in 2:10){
+  
+  pam_fit <- pam(gower_dist,
+                 diss = TRUE,
+                 k = i)
+  
+  sil_width[i] <- pam_fit$silinfo$avg.width
+  
+}
+
+# Plot sihouette width (higher is better)
+
+plot(1:10, sil_width,
+     xlab = "Number of clusters",
+     ylab = "Silhouette Width")
+lines(1:10, sil_width)
+```
+
+
+It looks like four clusters are a good fit for these data.
+
+```{r}
+pam_fit <- pam(gower_dist, diss = TRUE, k = 4)
+
+library(ggfortify)
+
+# compute PCA
+kbp2013_2017_ppl_pca <- 
+kbp2013_2017_ppl %>% 
+	select(-state) %>% 
+	filter(complete.cases(.)) %>% 
+	prcomp(., scale = TRUE) 
+
+# to help with plotting
+kbp2013_2017_ppl_with_clusters <- 
+kbp2013_2017_ppl %>% 
+	mutate(cluster = factor(pam_fit$clustering))  %>% 
+	filter(complete.cases(.))
+
+# for labels
+rownames(kbp2013_2017_ppl_with_clusters) <- 
+	kbp2013_2017_ppl_with_clusters$state
+	
+autoplot(kbp2013_2017_ppl_pca,
+				data = kbp2013_2017_ppl_with_clusters, 
+				colour = "cluster",
+				loadings = TRUE, 
+				loadings.colour = 'blue',
+				loadings.label = TRUE, 
+				loadings.label.size = 3,
+				size = 0, 
+				label = TRUE,
+				frame = TRUE) +
+	theme_minimal() +
+	coord_equal()
+```
+
+We can see that the states strongly cluster by the proportion of Black victims (states with higher proportions on the right on the above plot). Average age of victim also separates the states, and is correlated with the proportion of Black victims. Typically, states with higher proportions of Black victims have a younger average age at the time they were killed. We can see this relationship clearly below:
+
+```{r}
+ggplot(kbp2013_2017_ppl_with_clusters,
+aes(mean_age, 
+		prop_black)) +
+	geom_text(aes(label = state,
+								colour = cluster)) +
+	geom_smooth(method = "lm", 
+							colour = "black") +
+	theme_minimal()
+```
+
+
+We can also cluster the states using the time series of how many people killed per year. This is useful for identifying when groups of states had change points in their time series of people killed by police.
+
+First we compute the proportion of people killed per million, per state, per year:
+
+```{r}
+state_populations_long <- 
+	state_populations %>% 
+	select(`2010`:`2016`, state_abb) %>% 
+	gather(year, population, -state_abb) %>% 
+	filter(!is.na(state_abb))
+
+kbp2013_2017_props_per_year <- 
+kbp2013_2017 %>% 
+	nest(-event_year) %>% 
+	filter(!is.na(event_year)) %>% 
+	mutate(per_cap = map(data, ~.x %>% 
+	  group_by(state) %>% 
+	  tally() %>% 
+	  left_join(state_abb, by = c('state' = 'state_abb')) %>% 
+	  filter(!is.na(state_name)) %>% 
+	  left_join(state_populations_long %>% 
+	  						filter(year == event_year),
+	  					by = c("state" = "state_abb")) %>% 
+	  mutate(prop = n / population * 1000000))) %>% 
+	  unnest(per_cap) %>% 
+	  filter(!is.na(prop)) %>% 
+	arrange(event_year, state)
+
+kbp2013_2017_props_per_year
+```
+
+A widely-used way to cluster time series is shape-based clustering using the Dynamic Time Warping (DTW) distance as dissimilarity measure. We need to try a range of different possible number of clusters to see which number is th e best fit for our data. Here we try 3-30 clusters, and show the output of several cluster validity indices. 
+
+```{r}
+library(dtwclust)
+kbp2013_2017_props_per_year_s <- 
+kbp2013_2017_props_per_year %>% 
+	select(event_year, prop, state) 
+
+# input must be a list
+kbp2013_2017_props_per_year_split <- 
+  split(kbp2013_2017_props_per_year_s,   
+  			factor(kbp2013_2017_props_per_year_s$state))
+
+#... with each item a vector
+kbp2013_2017_props_per_year_split_num <- 
+map(kbp2013_2017_props_per_year_split, 
+		~pull(.x, prop))
+
+# partitional clustering, let's run a bunch of cluster analyses with 
+# different number of clusters to see what number is best
+n <- 3:35
+
+pck <- tsclust(kbp2013_2017_props_per_year_split_num, 
+							type = "partitional", k = n, 
+              distance = "dtw_basic", centroid = "pam", 
+              seed = 3247L, trace = TRUE)
+
+names(pck) <- paste0("k_", n)
+map_dfr(pck, ~cvi(.x, type = "internal")) %>% 
+	mutate(cvi = c('Sil', 'SF', 'CH', 'DB', 'DBstar', 'D', 'COP' ) ) %>% 
+	gather(n_clusters, value, -cvi) %>% 
+	mutate(n_clusters = readr::parse_number(n_clusters)) %>% 
+	ggplot(aes(n_clusters,
+						 value, 
+						 colour = cvi,
+						 group = cvi)) +
+	geom_line() +
+	facet_wrap( ~ cvi, scales = "free_y") +
+	theme_minimal()
+
+```
+
+The cluster validity indices don't show a strong signal of what the best number of clusters is for these data. We will go with five, since that seems to be indicated by D, COP, and CH. Here's the cluster analysis with 5 clusters:
+
+```{r}
+pc <- tsclust(kbp2013_2017_props_per_year_split_num, 
+							type = "partitional", k = 5, 
+              distance = "dtw_basic", centroid = "pam", 
+              seed = 3247L, trace = TRUE,
+              args = tsclust_args(dist = list(window.size = 5)))
+plot(pc)
+```
+
+The plot shows the obtained clusters and their respective prototypes (centroids) are shown as dashed lines. The first two clusters are the largest, and the centroids for these show two change points, for cluster one it's at 3 and cluster two it's at 4. So that suggests to us that for the states in clusters one and two, something happened in 2015 and 2016. 
+
+Here are the states in cluster one:
+
+```{r}
+states_in_clusters <- 
+	data_frame(cluster = pc@cluster,
+					   state = names(kbp2013_2017_props_per_year_split)) %>% 
+	arrange(cluster)
+
+states_in_clusters %>% 
+	filter(cluster == 1) %>% 
+	pull()
+```
+
+And these are the states in cluster two:
+
+```{r}
+states_in_clusters %>% 
+	filter(cluster == 2) %>% 
+	pull()
+```
+
+A follow-up to this analysis might look into the activities of the state legislatures in 2015 and 2016 that might be responsible for the change points that we see in the cluster centroids. Analysis of the states in cluster two in 2016 would be particulately interesting as that may reveal changes that could help to reduce people killed by police in other states. 
 
 ## Related work 
 
